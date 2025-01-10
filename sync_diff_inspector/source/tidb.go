@@ -174,6 +174,9 @@ func (s *TiDBSource) GenerateFixSQL(t DMLType, upstreamData, downstreamData map[
 	if t == Replace {
 		return utils.GenerateReplaceDMLWithAnnotation(upstreamData, downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
 	}
+	if t == Upsert {
+		return utils.GenerateUpsertDMLWithAnnotation(upstreamData, downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	}
 	log.Fatal("Don't support this type", zap.Any("dml type", t))
 	return ""
 }

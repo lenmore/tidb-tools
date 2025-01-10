@@ -318,6 +318,119 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 	return fmt.Sprintf("/*\n%s*/\nREPLACE INTO %s(%s) VALUES (%s);", tableString.String(), dbutil.TableName(schema, table.Name.O), strings.Join(sqlColNames, ","), strings.Join(sqlValues, ","))
 }
 
+// GenerateUpsertDML returns the insert SQL for the specific row values.
+func GenerateUpsertDML(data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
+	colNames := make([]string, 0, len(table.Columns))
+	values := make([]string, 0, len(table.Columns))
+	sqlColNamesAndValues := make([]string, 0, len(table.Columns))
+
+	for _, col := range table.Columns {
+		if col.IsGenerated() {
+			continue
+		}
+
+		colNames = append(colNames, dbutil.ColumnName(col.Name.O))
+		if data[col.Name.O].IsNull {
+			values = append(values, "NULL")
+			continue
+		}
+
+		var value1 string
+
+		if NeedQuotes(col.FieldType.GetType()) {
+			if dbutil.IsBlobType(col.FieldType.GetType()) || IsBinaryColumn(col) {
+				value1 = fmt.Sprintf("x'%x'", data[col.Name.O].Data)
+			} else {
+				value1 = fmt.Sprintf("'%s'", MysqlRealEscapeString(string(data[col.Name.O].Data)))
+			}
+		} else {
+			value1 = string(data[col.Name.O].Data)
+		}
+
+		values = append(values, value1)
+		sqlColNamesAndValues = append(sqlColNamesAndValues, fmt.Sprintf("%s=%s", col.Name.O, value1))
+	}
+
+	return fmt.Sprintf("REPLACE INTO %s(%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s;", dbutil.TableName(schema, table.Name.O), strings.Join(colNames, ","), strings.Join(values, ","), strings.Join(sqlColNamesAndValues, ","))
+}
+
+// GenerateUpsertDMLWithAnnotation returns the INSERT ... ON DUPLICATE KEY UPDATE SQL for the specific 2 rows.
+// And add Annotations to show the different columns.
+func GenerateUpsertDMLWithAnnotation(source, target map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
+	sqlColNames := make([]string, 0, len(table.Columns))
+	sqlValues := make([]string, 0, len(table.Columns))
+	sqlColNamesAndValues := make([]string, 0, len(table.Columns))
+	colNames := append(make([]string, 0, len(table.Columns)+1), "diff columns")
+	values1 := append(make([]string, 0, len(table.Columns)+1), "source data")
+	values2 := append(make([]string, 0, len(table.Columns)+1), "target data")
+	tableString := &strings.Builder{}
+	diffTable := tablewriter.NewWriter(tableString)
+	for _, col := range table.Columns {
+		if col.IsGenerated() {
+			continue
+		}
+
+		var data1, data2 *dbutil.ColumnData
+		var value1 string
+		data1 = source[col.Name.O]
+		data2 = target[col.Name.O]
+
+		if data1.IsNull {
+			value1 = "NULL"
+		} else {
+			if NeedQuotes(col.FieldType.GetType()) {
+				if dbutil.IsBlobType(col.FieldType.GetType()) || IsBinaryColumn(col) {
+					value1 = fmt.Sprintf("x'%x'", data1.Data)
+				} else {
+					value1 = fmt.Sprintf("'%s'", MysqlRealEscapeString(string(data1.Data)))
+				}
+			} else {
+				value1 = string(data1.Data)
+			}
+		}
+		colName := dbutil.ColumnName(col.Name.O)
+		sqlColNames = append(sqlColNames, colName)
+		sqlValues = append(sqlValues, value1)
+		sqlColNamesAndValues = append(sqlColNamesAndValues, fmt.Sprintf("%s=%s", colName, value1))
+
+		// Only show different columns in annotations.
+		if (string(data1.Data) == string(data2.Data)) && (data1.IsNull == data2.IsNull) {
+			continue
+		}
+
+		colNames = append(colNames, colName)
+		values1 = append(values1, value1)
+
+		if data2.IsNull {
+			values2 = append(values2, "NULL")
+		} else {
+			if NeedQuotes(col.FieldType.GetType()) {
+				if dbutil.IsBlobType(col.FieldType.GetType()) || IsBinaryColumn(col) {
+					values2 = append(values2, fmt.Sprintf("x'%x'", data1.Data))
+				} else {
+					values2 = append(values2, fmt.Sprintf("'%s'", MysqlRealEscapeString(string(data2.Data))))
+				}
+			} else {
+				values2 = append(values2, string(data2.Data))
+			}
+		}
+
+	}
+
+	diffTable.SetRowLine(true)
+	diffTable.SetHeader(colNames)
+	diffTable.Append(values1)
+	diffTable.Append(values2)
+	diffTable.SetCenterSeparator("╋")
+	diffTable.SetColumnSeparator("╏")
+	diffTable.SetRowSeparator("╍")
+	diffTable.SetAlignment(tablewriter.ALIGN_LEFT)
+	diffTable.SetBorder(false)
+	diffTable.Render()
+
+	return fmt.Sprintf("/*\n%s*/\nINSERT INTO %s(%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s;", tableString.String(), dbutil.TableName(schema, table.Name.O), strings.Join(sqlColNames, ","), strings.Join(sqlValues, ","), strings.Join(sqlColNamesAndValues, ","))
+}
+
 // GerateReplaceDMLWithAnnotation returns the delete SQL for the specific row.
 func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
 	kvs := make([]string, 0, len(table.Columns))

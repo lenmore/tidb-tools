@@ -12,6 +12,8 @@ export-fix-sql = true
 # ignore check table's data
 check-struct-only = false
 
+# using upsert instead replace when export fix sql
+upsert-instead-replace = false
 
 ######################### Databases config #########################
 [data-sources]

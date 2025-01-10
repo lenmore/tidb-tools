@@ -72,6 +72,7 @@ type Diff struct {
 	exportFixSQL     bool
 	sqlWg            sync.WaitGroup
 	checkpointWg     sync.WaitGroup
+	useUpsert        bool
 
 	FixSQLDir     string
 	CheckpointDir string
@@ -142,6 +143,7 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	df.workSource = df.pickSource(ctx)
 	df.FixSQLDir = cfg.Task.FixDir
 	df.CheckpointDir = cfg.Task.CheckpointDir
+	df.useUpsert = cfg.UseUpsertInsteadReplace
 
 	sourceConfigs, targetConfig, err := getConfigsForReport(cfg)
 	if err != nil {
@@ -738,9 +740,15 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			rowsAdd++
 			rowsDelete++
 			if df.exportFixSQL {
-				sql = df.downstream.GenerateFixSQL(
-					source.Replace, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex(),
-				)
+				if df.useUpsert {
+					sql = df.downstream.GenerateFixSQL(
+						source.Upsert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex(),
+					)
+				} else {
+					sql = df.downstream.GenerateFixSQL(
+						source.Replace, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex(),
+					)
+				}
 				log.Debug("[update]", zap.String("sql", sql))
 			}
 			lastUpstreamData = nil

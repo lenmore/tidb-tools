@@ -41,6 +41,7 @@ const (
 	Insert DMLType = iota + 1
 	Delete
 	Replace
+	Upsert
 )
 
 const (

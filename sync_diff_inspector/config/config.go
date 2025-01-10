@@ -396,6 +396,9 @@ type Config struct {
 
 	// print version if set true
 	PrintVersion bool
+
+	// using upsert instead replace when export fix sql.
+	UseUpsertInsteadReplace bool `toml:"upsert-instead-replace" json:"export-fix-sql"`
 }
 
 // NewConfig creates a new config.
@@ -415,6 +418,7 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.CheckStructOnly, "check-struct-only", false, "ignore check table's data")
 	fs.BoolVar(&cfg.SkipNonExistingTable, "skip-non-existing-table", false, "skip validation for tables that don't exist upstream or downstream")
 	fs.BoolVar(&cfg.CheckDataOnly, "check-data-only", false, "ignore check table's struct")
+	fs.BoolVar(&cfg.UseUpsertInsteadReplace, "upsert-instead-replace", false, "using upsert instead replace when export fix sql")
 
 	_ = fs.MarkHidden("check-data-only")
 

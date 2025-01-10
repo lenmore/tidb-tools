@@ -164,6 +164,8 @@ func (s *MySQLSources) GenerateFixSQL(t DMLType, upstreamData, downstreamData ma
 		return utils.GenerateDeleteDML(downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
 	case Replace:
 		return utils.GenerateReplaceDMLWithAnnotation(upstreamData, downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	case Upsert:
+		return utils.GenerateUpsertDMLWithAnnotation(upstreamData, downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
 	default:
 		log.Fatal("Don't support this type", zap.Any("dml type", t))
 	}
