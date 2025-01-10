@@ -135,6 +135,48 @@ func GetColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*
 	return indexColumns
 }
 
+func MysqlRealEscapeString(value string) string {
+	var sb strings.Builder
+	var escape byte
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+
+		escape = 0
+
+		switch c {
+		case 0: /* Must be escaped for 'mysql' */
+			escape = '0'
+			break
+		case '\n': /* Must be escaped for logs */
+			escape = 'n'
+			break
+		case '\r':
+			escape = 'r'
+			break
+		case '\\':
+			escape = '\\'
+			break
+		case '\'':
+			escape = '\''
+			break
+		case '"': /* Better safe than sorry */
+			escape = '"'
+			break
+		case '\032': //十进制26,八进制32,十六进制1a, /* This gives problems on Win32 */
+			escape = 'Z'
+		}
+
+		if escape != 0 {
+			sb.WriteByte('\\')
+			sb.WriteByte(escape)
+		} else {
+			sb.WriteByte(c)
+		}
+	}
+
+	return sb.String()
+}
+
 // GetTableRowsQueryFormat returns a rowsQuerySQL template for the specific table.
 //
 //	e.g. SELECT /*!40001 SQL_NO_CACHE */ `a`, `b` FROM `schema`.`table` WHERE %s ORDER BY `a`.
@@ -191,7 +233,7 @@ func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableIn
 			if dbutil.IsBlobType(col.FieldType.GetType()) || IsBinaryColumn(col) {
 				values = append(values, fmt.Sprintf("x'%x'", data[col.Name.O].Data))
 			} else {
-				values = append(values, fmt.Sprintf("'%s'", strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
+				values = append(values, fmt.Sprintf("'%s'", MysqlRealEscapeString(string(data[col.Name.O].Data))))
 			}
 		} else {
 			values = append(values, string(data[col.Name.O].Data))
@@ -228,7 +270,7 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 				if dbutil.IsBlobType(col.FieldType.GetType()) || IsBinaryColumn(col) {
 					value1 = fmt.Sprintf("x'%x'", data1.Data)
 				} else {
-					value1 = fmt.Sprintf("'%s'", strings.Replace(string(data1.Data), "'", "\\'", -1))
+					value1 = fmt.Sprintf("'%s'", MysqlRealEscapeString(string(data1.Data)))
 				}
 			} else {
 				value1 = string(data1.Data)
@@ -253,7 +295,7 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 				if dbutil.IsBlobType(col.FieldType.GetType()) || IsBinaryColumn(col) {
 					values2 = append(values2, fmt.Sprintf("x'%x'", data1.Data))
 				} else {
-					values2 = append(values2, fmt.Sprintf("'%s'", strings.Replace(string(data2.Data), "'", "\\'", -1)))
+					values2 = append(values2, fmt.Sprintf("'%s'", MysqlRealEscapeString(string(data2.Data))))
 				}
 			} else {
 				values2 = append(values2, string(data2.Data))
